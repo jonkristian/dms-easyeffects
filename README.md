@@ -1,6 +1,6 @@
-# EasyEffects Profile Switcher
+# Easy Effects Profile Switcher
 
-A Dank Material Shell plugin for quickly switching between EasyEffects profiles.
+A Dank Material Shell plugin for quickly switching between Easy Effects profiles.
 
 ![Screenshot](screenshot.png)
 
@@ -14,8 +14,8 @@ A Dank Material Shell plugin for quickly switching between EasyEffects profiles.
 
 ## Requirements
 
-- EasyEffects installed on your system
-- Audio profiles configured in EasyEffects (output and/or input presets)
+- Easy Effects installed on your system
+- Audio profiles configured in Easy Effects (output and/or input presets)
 
 ## Installation
 
@@ -27,24 +27,19 @@ A Dank Material Shell plugin for quickly switching between EasyEffects profiles.
 
 2. The plugin will be automatically detected and can be enabled in DMS settings.
 
-3. Configure your audio profiles in EasyEffects - the plugin will automatically detect them.
+3. Configure your audio profiles in Easy Effects
 
 ## Usage
 
 - Click the bar widget to open the profile menu
-- Select profiles from Output or Input sections
+- Select profiles from output or input sections
 - Click "Clear" (top right) to reset all presets
 - Click refresh icon (top right) to reload profiles
-- Click "Open EasyEffects" to launch the full application
+- Click "Open Easy Effects" to launch the full application
 
 ## Configuration
 
-The plugin automatically detects both output and input presets from EasyEffects. Simply configure your presets in EasyEffects and they will appear in the plugin menu under their respective sections.
-
-To add or modify presets:
-
-1. Open EasyEffects and create/save your audio profiles
-2. Click the refresh button in the plugin popout to reload the list
+Not much to it. The plugin should automatically detect both output and input presets.
 
 ## Permissions
 

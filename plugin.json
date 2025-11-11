@@ -1,7 +1,7 @@
 {
   "id": "easyEffects",
-  "name": "EasyEffects Profile Switcher",
-  "description": "Quick switch between EasyEffects audio profiles",
+  "name": "Easy Effects Profile Switcher",
+  "description": "Quick switch between Easy Effects audio profiles",
   "version": "1.0.0",
   "author": "jonkristian",
   "type": "widget",

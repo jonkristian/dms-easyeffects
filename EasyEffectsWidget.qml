@@ -137,7 +137,7 @@ PluginComponent {
             // Reset for next time
             root.profileLines = []
 
-            // Check what's actually active in EasyEffects
+            // Check what's actually active in Easy Effects
             syncActiveProfile()
         }
     }
@@ -149,12 +149,12 @@ PluginComponent {
 
         onExited: (exitCode, exitStatus) => {
             if (exitCode === 0) {
-                // EasyEffects is installed, check if running
+                // Easy Effects is installed, check if running
                 checkRunning.running = true
             } else {
                 // Not installed
-                console.error("EasyEffects is not installed")
-                ToastService.showError("EasyEffects", "EasyEffects is not installed. Please install it first.")
+                console.error("Easy Effects is not installed")
+                ToastService.showError("Easy Effects", "Easy Effects is not installed. Please install it first.")
             }
         }
     }
@@ -166,11 +166,11 @@ PluginComponent {
 
         onExited: (exitCode, exitStatus) => {
             if (exitCode === 0) {
-                // EasyEffects is running, switch profile
+                // Easy Effects is running, switch profile
                 switchProfileCommand.running = true
             } else {
-                // EasyEffects not running, start it first
-                console.warn("EasyEffects not running, starting service...")
+                // Easy Effects not running, start it first
+                console.warn("Easy Effects not running, starting service...")
                 startProcess.running = true
             }
         }
@@ -186,8 +186,8 @@ PluginComponent {
                 // Give it a moment to start, then switch profile
                 switchTimer.start()
             } else {
-                console.error("Failed to start EasyEffects")
-                ToastService.showError("EasyEffects", "Failed to start EasyEffects. Is it installed?")
+                console.error("Failed to start Easy Effects")
+                ToastService.showError("Easy Effects", "Failed to start Easy Effects. Is it installed?")
             }
         }
     }
@@ -206,8 +206,8 @@ PluginComponent {
 
         onExited: (exitCode, exitStatus) => {
             if (exitCode !== 0) {
-                console.warn("EasyEffects: Failed to load profile with code", exitCode)
-                ToastService.showError("EasyEffects", "Failed to switch profile")
+                console.warn("Easy Effects: Failed to load profile with code", exitCode)
+                ToastService.showError("Easy Effects", "Failed to switch profile")
             }
         }
     }
@@ -504,7 +504,7 @@ PluginComponent {
                         }
 
                         StyledText {
-                            text: "Open EasyEffects"
+                            text: "Open Easy Effects"
                             anchors.verticalCenter: parent.verticalCenter
                         }
                     }

@@ -9,7 +9,7 @@ PluginSettings {
 
     StyledText {
         width: parent.width
-        text: "EasyEffects Profile Switcher"
+        text: "Easy Effects Profile Switcher"
         font.pixelSize: Theme.fontSizeLarge
         font.weight: Font.Bold
         color: Theme.surfaceText
@@ -17,7 +17,7 @@ PluginSettings {
 
     StyledText {
         width: parent.width
-        text: "Quickly switch between EasyEffects output and input audio profiles. Profiles are automatically detected from ~/.config/easyeffects/."
+        text: "Quickly switch between Easy Effects output and input audio profiles. Profiles are automatically detected by querying Easy Effects directly."
         font.pixelSize: Theme.fontSizeSmall
         color: Theme.surfaceVariantText
         wrapMode: Text.WordWrap
