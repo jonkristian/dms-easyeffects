@@ -35,7 +35,7 @@ PluginComponent {
 
     Process {
         id: checkActiveOutput
-        command: ["easyeffects", "-s", "output"]
+        command: ["easyeffects", "-a", "output"]
         running: false
         stdout: SplitParser {
             onRead: data => {
@@ -53,7 +53,7 @@ PluginComponent {
 
     Process {
         id: checkActiveInput
-        command: ["easyeffects", "-s", "input"]
+        command: ["easyeffects", "-a", "input"]
         running: false
         stdout: SplitParser {
             onRead: data => {
@@ -219,7 +219,7 @@ PluginComponent {
         pluginService.savePluginData(pluginId, "currentOutputIndex", index)
 
         var profileName = root.outputProfiles[index]
-        switchProfileCommand.command = ["sh", "-c", "easyeffects -l \"" + profileName + "\" -w"]
+        switchProfileCommand.command = ["sh", "-c", "easyeffects -l \"" + profileName + "\""]
         checkInstalled.running = true
     }
 
@@ -228,7 +228,7 @@ PluginComponent {
         pluginService.savePluginData(pluginId, "currentInputIndex", index)
 
         var profileName = root.inputProfiles[index]
-        switchProfileCommand.command = ["sh", "-c", "easyeffects -l \"" + profileName + "\" -w"]
+        switchProfileCommand.command = ["sh", "-c", "easyeffects -l \"" + profileName + "\""]
         checkInstalled.running = true
     }
 
