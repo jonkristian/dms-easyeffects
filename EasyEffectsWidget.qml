@@ -113,19 +113,33 @@ PluginComponent {
             var outputProfiles = []
             var inputProfiles = []
 
-            // Parse output: "Output Presets: profile1,profile2,"
-            //               "Input Presets: profile3,profile4,"
+            // Parse output for Easy Effects 8.0.0+ format:
+            // "Output presets:"
+            // "1\tBose QC15"
+            // "2\tKZ EDX Ultra"
+            // ""
+            // "Input presets:"
+            // "1\tPodcast-Voice"
+            var currentSection = ""
+
             for (var i = 0; i < root.profileLines.length; i++) {
                 var line = root.profileLines[i]
-                if (line.startsWith("Output Presets:")) {
-                    var outputStr = line.substring("Output Presets:".length).trim()
-                    if (outputStr) {
-                        outputProfiles = outputStr.split(',').map(s => s.trim()).filter(s => s !== '')
-                    }
-                } else if (line.startsWith("Input Presets:")) {
-                    var inputStr = line.substring("Input Presets:".length).trim()
-                    if (inputStr) {
-                        inputProfiles = inputStr.split(',').map(s => s.trim()).filter(s => s !== '')
+
+                if (line.toLowerCase().startsWith("output presets:")) {
+                    currentSection = "output"
+                } else if (line.toLowerCase().startsWith("input presets:")) {
+                    currentSection = "input"
+                } else if (line.trim() !== "") {
+                    // Parse numbered list: "1\tProfile Name" or just "Profile Name"
+                    // Remove leading number and tab if present
+                    var profileName = line.replace(/^\d+\s*\t?\s*/, '').trim()
+
+                    if (profileName !== "") {
+                        if (currentSection === "output") {
+                            outputProfiles.push(profileName)
+                        } else if (currentSection === "input") {
+                            inputProfiles.push(profileName)
+                        }
                     }
                 }
             }
