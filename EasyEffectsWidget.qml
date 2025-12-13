@@ -16,7 +16,7 @@ PluginComponent {
     property string currentOutputProfile: currentOutputIndex >= 0 && currentOutputIndex < outputProfiles.length ? outputProfiles[currentOutputIndex] : "None"
     property string currentInputProfile: currentInputIndex >= 0 && currentInputIndex < inputProfiles.length ? inputProfiles[currentInputIndex] : "None"
     property bool profilesLoaded: false
-    property var profileLines: []
+    property string profileOutput: ""
 
     Component.onCompleted: {
         // Load profiles dynamically
@@ -103,9 +103,7 @@ PluginComponent {
         running: false
         stdout: SplitParser {
             onRead: data => {
-                if (data && data.trim() !== '') {
-                    root.profileLines.push(data.trim())
-                }
+                root.profileOutput += data + "\n"
             }
         }
 
@@ -121,18 +119,19 @@ PluginComponent {
             // "Input presets:"
             // "1\tPodcast-Voice"
             var currentSection = ""
+            var lines = root.profileOutput.split("\n")
 
-            for (var i = 0; i < root.profileLines.length; i++) {
-                var line = root.profileLines[i]
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i]
 
-                if (line.toLowerCase().startsWith("output presets:")) {
+                if (line.toLowerCase().indexOf("output presets") !== -1) {
                     currentSection = "output"
-                } else if (line.toLowerCase().startsWith("input presets:")) {
+                } else if (line.toLowerCase().indexOf("input presets") !== -1) {
                     currentSection = "input"
                 } else if (line.trim() !== "") {
                     // Parse numbered list: "1\tProfile Name" or just "Profile Name"
-                    // Remove leading number and tab if present
-                    var profileName = line.replace(/^\d+\s*\t?\s*/, '').trim()
+                    // Remove leading number and tab/spaces if present
+                    var profileName = line.replace(/^\d+[\t\s]+/, '').trim()
 
                     if (profileName !== "") {
                         if (currentSection === "output") {
@@ -149,7 +148,7 @@ PluginComponent {
             root.profilesLoaded = true
 
             // Reset for next time
-            root.profileLines = []
+            root.profileOutput = ""
 
             // Check what's actually active in Easy Effects
             syncActiveProfile()
@@ -192,7 +191,7 @@ PluginComponent {
 
     Process {
         id: startProcess
-        command: ["easyeffects", "--gapplication-service"]
+        command: ["easyeffects", "--service-mode"]
         running: false
 
         onExited: (exitCode, exitStatus) => {
@@ -368,7 +367,7 @@ PluginComponent {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                root.profileLines = []
+                                root.profileOutput = ""
                                 loadProfiles.running = true
                             }
                         }
