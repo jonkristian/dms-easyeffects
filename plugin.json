@@ -2,11 +2,14 @@
   "id": "easyEffects",
   "name": "Easy Effects Profile Switcher",
   "description": "Quick switch between Easy Effects audio profiles",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "author": "jonkristian",
   "type": "widget",
   "component": "./EasyEffectsWidget.qml",
   "settings": "./EasyEffectsSettings.qml",
   "icon": "graphic_eq",
-  "permissions": ["settings_read", "settings_write"]
+  "permissions": [
+    "settings_read",
+    "settings_write"
+  ]
 }

@@ -99,7 +99,7 @@ PluginComponent {
 
     Process {
         id: loadProfiles
-        command: ["easyeffects", "-p"]
+        command: ["sh", "-c", "easyeffects -p 2>&1"]
         running: false
         stdout: SplitParser {
             onRead: data => {
