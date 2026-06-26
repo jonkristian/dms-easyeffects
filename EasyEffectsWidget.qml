@@ -9,250 +9,231 @@ import qs.Modules.Plugins
 PluginComponent {
     id: root
 
+    // Easy Effects is the source of truth. This plugin only reads its state
+    // and reflects it; it never launches a windowed instance and persists
+    // nothing of its own. Startup is left to the user's easyeffects service.
+    //
+    // Passive reads avoid the Easy Effects CLI entirely (the preset list is
+    // read from disk), because every CLI flag except `-s` hides an open
+    // Easy Effects window as a side effect. Active presets use the window-safe
+    // `-s`; bypass state (`-b 3`, which does hide the window) is only read on
+    // startup / explicit refresh, never when just opening the popout.
     property var outputProfiles: []
     property var inputProfiles: []
-    property int currentOutputIndex: pluginData.currentOutputIndex || -1
-    property int currentInputIndex: pluginData.currentInputIndex || -1
-    property string currentOutputProfile: currentOutputIndex >= 0 && currentOutputIndex < outputProfiles.length ? outputProfiles[currentOutputIndex] : "None"
-    property string currentInputProfile: currentInputIndex >= 0 && currentInputIndex < inputProfiles.length ? inputProfiles[currentInputIndex] : "None"
-    property bool profilesLoaded: false
-    property string profileOutput: ""
+    property string activeOutput: ""
+    property string activeInput: ""
+    property bool bypassed: false
+    property bool eeRunning: false
+    property bool detected: false
 
-    Component.onCompleted: {
-        // Load profiles dynamically
-        loadProfiles.running = true
+    property int currentOutputIndex: outputProfiles.indexOf(activeOutput)
+    property int currentInputIndex: inputProfiles.indexOf(activeInput)
+    property string currentOutputProfile: activeOutput !== "" ? activeOutput : "None"
+    property string currentInputProfile: activeInput !== "" ? activeInput : "None"
+
+    property string listBuffer: ""
+    property string pendingPreset: ""
+    property bool pendingFull: false
+
+    Component.onCompleted: refresh(true)
+
+    // refresh(full): always re-read the preset list from disk and the running
+    // state. When running, also read active presets (window-safe). Only a
+    // "full" refresh additionally reads bypass state (which hides an open
+    // window), so the popout's open refresh passes full=false.
+    function refresh(full) {
+        root.pendingFull = (full === true)
+        root.listBuffer = ""
+        listProc.running = true
+        runningCheck.running = true
     }
 
-    function syncActiveProfile() {
-        // Reset before checking
-        root.activeOutputProfile = ""
-        root.activeInputProfile = ""
-        checkActiveOutput.running = true
-    }
-
-    property string activeOutputProfile: ""
-    property string activeInputProfile: ""
-
+    // Preset list straight from disk -> no Easy Effects invocation, no window
+    // side effect, works even when Easy Effects isn't running.
     Process {
-        id: checkActiveOutput
-        command: ["easyeffects", "-a", "output"]
+        id: listProc
+        command: ["sh", "-c", "base=\"${XDG_DATA_HOME:-$HOME/.local/share}/easyeffects\"; for d in output input; do echo \"@@$d@@\"; ls -1 \"$base/$d\" 2>/dev/null; done"]
         running: false
         stdout: SplitParser {
             onRead: data => {
-                if (data && data.trim() !== '') {
-                    root.activeOutputProfile = data.trim()
-                }
+                root.listBuffer += data + "\n"
             }
         }
-
         onExited: (exitCode, exitStatus) => {
-            // Now check input
-            checkActiveInput.running = true
+            root.parseList(root.listBuffer)
+            root.listBuffer = ""
         }
     }
 
-    Process {
-        id: checkActiveInput
-        command: ["easyeffects", "-a", "input"]
-        running: false
-        stdout: SplitParser {
-            onRead: data => {
-                if (data && data.trim() !== '') {
-                    root.activeInputProfile = data.trim()
+    function parseList(buffer) {
+        var outputs = []
+        var inputs = []
+        var section = ""
+        var lines = buffer.split("\n")
+
+        for (var i = 0; i < lines.length; i++) {
+            var t = lines[i].trim()
+            if (t === "@@output@@") {
+                section = "output"
+            } else if (t === "@@input@@") {
+                section = "input"
+            } else if (t !== "" && /\.json$/.test(t)) {
+                // Strip ".json"; ignore other files (e.g. exported ParametricEq .txt).
+                var name = t.substring(0, t.length - 5)
+                if (section === "output") {
+                    outputs.push(name)
+                } else if (section === "input") {
+                    inputs.push(name)
                 }
             }
         }
 
-        onExited: (exitCode, exitStatus) => {
-            // Find output profile index
-            var outputIdx = -1
-            for (var i = 0; i < root.outputProfiles.length; i++) {
-                if (root.outputProfiles[i] === root.activeOutputProfile) {
-                    outputIdx = i
-                    break
-                }
-            }
-            // If empty, set to None (-1)
-            if (root.activeOutputProfile === "") {
-                outputIdx = -1
-            }
-
-            // Find input profile index
-            var inputIdx = -1
-            for (var j = 0; j < root.inputProfiles.length; j++) {
-                if (root.inputProfiles[j] === root.activeInputProfile) {
-                    inputIdx = j
-                    break
-                }
-            }
-            // If empty, set to None (-1)
-            if (root.activeInputProfile === "") {
-                inputIdx = -1
-            }
-
-            root.currentOutputIndex = outputIdx
-            root.currentInputIndex = inputIdx
-            pluginService.savePluginData(pluginId, "currentOutputIndex", outputIdx)
-            pluginService.savePluginData(pluginId, "currentInputIndex", inputIdx)
-        }
+        root.outputProfiles = outputs
+        root.inputProfiles = inputs
     }
 
     Process {
-        id: loadProfiles
-        command: ["sh", "-c", "easyeffects -p 2>&1"]
-        running: false
-        stdout: SplitParser {
-            onRead: data => {
-                root.profileOutput += data + "\n"
-            }
-        }
-
-        onExited: (exitCode, exitStatus) => {
-            var outputProfiles = []
-            var inputProfiles = []
-
-            // Parse output for Easy Effects 8.0.0+ format:
-            // "Output presets:"
-            // "1\tBose QC15"
-            // "2\tKZ EDX Ultra"
-            // ""
-            // "Input presets:"
-            // "1\tPodcast-Voice"
-            var currentSection = ""
-            var lines = root.profileOutput.split("\n")
-
-            for (var i = 0; i < lines.length; i++) {
-                var line = lines[i]
-
-                if (line.toLowerCase().indexOf("output presets") !== -1) {
-                    currentSection = "output"
-                } else if (line.toLowerCase().indexOf("input presets") !== -1) {
-                    currentSection = "input"
-                } else if (line.trim() !== "") {
-                    // Parse numbered list: "1\tProfile Name" or just "Profile Name"
-                    // Remove leading number and tab/spaces if present
-                    var profileName = line.replace(/^\d+[\t\s]+/, '').trim()
-
-                    if (profileName !== "") {
-                        if (currentSection === "output") {
-                            outputProfiles.push(profileName)
-                        } else if (currentSection === "input") {
-                            inputProfiles.push(profileName)
-                        }
-                    }
-                }
-            }
-
-            root.outputProfiles = outputProfiles
-            root.inputProfiles = inputProfiles
-            root.profilesLoaded = true
-
-            // Reset for next time
-            root.profileOutput = ""
-
-            // Check what's actually active in Easy Effects
-            syncActiveProfile()
-        }
-    }
-
-    Process {
-        id: checkInstalled
-        command: ["sh", "-c", "command -v easyeffects"]
-        running: false
-
-        onExited: (exitCode, exitStatus) => {
-            if (exitCode === 0) {
-                // Easy Effects is installed, check if running
-                checkRunning.running = true
-            } else {
-                // Not installed
-                console.error("Easy Effects is not installed")
-                ToastService.showError("Easy Effects", "Easy Effects is not installed. Please install it first.")
-            }
-        }
-    }
-
-    Process {
-        id: checkRunning
+        id: runningCheck
         command: ["pgrep", "-x", "easyeffects"]
         running: false
-
         onExited: (exitCode, exitStatus) => {
-            if (exitCode === 0) {
-                // Easy Effects is running, switch profile
-                switchProfileCommand.running = true
+            root.eeRunning = (exitCode === 0)
+            root.detected = true
+            if (root.eeRunning) {
+                pollTimer.stop()
+                // `-s` is the only read that does not hide an open window.
+                activeProc.running = true
+                if (root.pendingFull) {
+                    bypassReadProc.running = true
+                }
             } else {
-                // Easy Effects not running, start it first
-                console.warn("Easy Effects not running, starting service...")
-                startProcess.running = true
+                root.activeOutput = ""
+                root.activeInput = ""
+                pollTimer.start()
             }
         }
     }
 
-    Process {
-        id: startProcess
-        command: ["easyeffects", "--service-mode"]
-        running: false
+    // While Easy Effects isn't running, keep re-detecting (cheaply, via pgrep)
+    // until it appears. Never query, never launch.
+    Timer {
+        id: pollTimer
+        interval: 3000
+        repeat: true
+        onTriggered: refresh(false)
+    }
 
-        onExited: (exitCode, exitStatus) => {
-            if (exitCode === 0) {
-                // Give it a moment to start, then switch profile
-                switchTimer.start()
-            } else {
-                console.error("Failed to start Easy Effects")
-                ToastService.showError("Easy Effects", "Failed to start Easy Effects. Is it installed?")
+    // Active presets via the window-safe `-s`. It always prints both an
+    // "input:" and "output:" line, so empty values clear the active state.
+    Process {
+        id: activeProc
+        command: ["easyeffects", "-s"]
+        running: false
+        stdout: SplitParser {
+            onRead: data => {
+                var t = data.trim()
+                var low = t.toLowerCase()
+                if (low.indexOf("output:") === 0) {
+                    root.activeOutput = t.substring(t.indexOf(":") + 1).trim()
+                } else if (low.indexOf("input:") === 0) {
+                    root.activeInput = t.substring(t.indexOf(":") + 1).trim()
+                }
             }
         }
+    }
+
+    // Bypass state. `-b 3` hides an open window, so this only runs on a full
+    // refresh (startup / refresh button), not when opening the popout.
+    Process {
+        id: bypassReadProc
+        command: ["easyeffects", "-b", "3"]
+        running: false
+        stdout: SplitParser {
+            onRead: data => {
+                var t = data.trim()
+                if (t !== "") {
+                    // 1 = bypass enabled (effects off), 2 = disabled.
+                    root.bypassed = (t === "1")
+                }
+            }
+        }
+    }
+
+    // --- Actions (only triggered by explicit user interaction) ---
+
+    function loadProfile(name) {
+        root.pendingPreset = name
+        if (root.eeRunning) {
+            doLoad()
+        } else {
+            // Don't launch a bare (windowed) instance; bring up the service.
+            Quickshell.execDetached(["systemctl", "--user", "start", "easyeffects.service"])
+            serviceTimer.start()
+        }
+    }
+
+    function doLoad() {
+        loadProc.command = ["easyeffects", "-l", root.pendingPreset]
+        loadProc.running = true
     }
 
     Timer {
-        id: switchTimer
-        interval: 500
+        id: serviceTimer
+        interval: 1500
         repeat: false
-        onTriggered: switchProfileCommand.running = true
+        onTriggered: {
+            root.eeRunning = true
+            doLoad()
+        }
     }
 
     Process {
-        id: switchProfileCommand
-        command: ["sh", "-c", ""]
+        id: loadProc
+        command: ["easyeffects", "-l", ""]
         running: false
-
         onExited: (exitCode, exitStatus) => {
             if (exitCode !== 0) {
-                console.warn("Easy Effects: Failed to load profile with code", exitCode)
-                ToastService.showError("Easy Effects", "Failed to switch profile")
+                ToastService.showError("Easy Effects", "Failed to load preset")
+            }
+            // Re-read active state (window-safe).
+            refresh(false)
+        }
+    }
+
+    function toggleBypass() {
+        if (!root.eeRunning) {
+            return
+        }
+        // bypassed -> disable bypass (2, effects on); not bypassed -> enable (1, effects off)
+        var target = root.bypassed ? "2" : "1"
+        bypassWriteProc.command = ["easyeffects", "-b", target]
+        bypassWriteProc.running = true
+        root.bypassed = !root.bypassed
+    }
+
+    Process {
+        id: bypassWriteProc
+        command: ["easyeffects", "-b", "3"]
+        running: false
+        onExited: (exitCode, exitStatus) => {
+            if (exitCode !== 0) {
+                // Revert optimistic flip on failure.
+                root.bypassed = !root.bypassed
+                ToastService.showError("Easy Effects", "Failed to toggle bypass")
             }
         }
     }
 
-    property int pendingProfileIndex: -1
-
-    function loadOutputProfile(index) {
-        root.currentOutputIndex = index
-        pluginService.savePluginData(pluginId, "currentOutputIndex", index)
-
-        var profileName = root.outputProfiles[index]
-        switchProfileCommand.command = ["sh", "-c", "easyeffects -l \"" + profileName + "\""]
-        checkInstalled.running = true
+    function startService() {
+        Quickshell.execDetached(["systemctl", "--user", "start", "easyeffects.service"])
+        serviceDetectTimer.start()
     }
 
-    function loadInputProfile(index) {
-        root.currentInputIndex = index
-        pluginService.savePluginData(pluginId, "currentInputIndex", index)
-
-        var profileName = root.inputProfiles[index]
-        switchProfileCommand.command = ["sh", "-c", "easyeffects -l \"" + profileName + "\""]
-        checkInstalled.running = true
-    }
-
-    function resetAllProfiles() {
-        root.currentOutputIndex = -1
-        root.currentInputIndex = -1
-        pluginService.savePluginData(pluginId, "currentOutputIndex", -1)
-        pluginService.savePluginData(pluginId, "currentInputIndex", -1)
-
-        switchProfileCommand.command = ["sh", "-c", "easyeffects -r"]
-        checkInstalled.running = true
+    Timer {
+        id: serviceDetectTimer
+        interval: 1500
+        repeat: false
+        onTriggered: refresh(true)
     }
 
     horizontalBarPill: Component {
@@ -261,11 +242,12 @@ PluginComponent {
 
             DankIcon {
                 name: "graphic_eq"
+                opacity: root.bypassed ? 0.5 : 1.0
                 anchors.verticalCenter: parent.verticalCenter
             }
 
             StyledText {
-                text: root.currentOutputProfile + (root.currentInputProfile !== "None" ? " / " + root.currentInputProfile : "")
+                text: root.bypassed ? "Bypassed" : (root.currentOutputProfile + (root.currentInputProfile !== "None" ? " / " + root.currentInputProfile : ""))
                 anchors.verticalCenter: parent.verticalCenter
             }
         }
@@ -277,11 +259,12 @@ PluginComponent {
 
             DankIcon {
                 name: "graphic_eq"
+                opacity: root.bypassed ? 0.5 : 1.0
                 anchors.horizontalCenter: parent.horizontalCenter
             }
 
             StyledText {
-                text: root.currentOutputProfile
+                text: root.bypassed ? "Off" : root.currentOutputProfile
                 font.pixelSize: 10
                 anchors.horizontalCenter: parent.horizontalCenter
             }
@@ -294,8 +277,9 @@ PluginComponent {
             showCloseButton: true
 
             Component.onCompleted: {
-                // Sync with active profile when popout opens
-                root.syncActiveProfile()
+                // Window-safe refresh on open (no bypass read), so an open
+                // Easy Effects window isn't hidden just by opening the popout.
+                root.refresh(false)
             }
 
             Column {
@@ -316,34 +300,31 @@ PluginComponent {
                         font.weight: Font.Normal
                         color: Theme.surfaceText
                         anchors.verticalCenter: parent.verticalCenter
-                        width: parent.width - resetButton.width - refreshButton.width - Theme.spacingS * 2
+                        width: parent.width - bypassButton.width - refreshButton.width - Theme.spacingS * 2
                     }
 
+                    // Global bypass toggle (effects on/off). Highlighted when effects are active.
                     StyledRect {
-                        id: resetButton
-                        width: resetText.width + Theme.spacingS * 2
+                        id: bypassButton
+                        width: 32
                         height: 32
                         radius: Theme.cornerRadius
-                        color: resetMouseHeader.containsMouse ? Theme.surfaceContainerHighest : "transparent"
+                        visible: root.eeRunning
+                        color: bypassMouse.containsMouse ? Theme.surfaceContainerHighest : "transparent"
                         anchors.verticalCenter: parent.verticalCenter
 
-                        StyledText {
-                            id: resetText
-                            text: "Clear"
+                        DankIcon {
+                            name: "power_settings_new"
                             anchors.centerIn: parent
-                            color: Theme.surfaceText
-                            font.pixelSize: Theme.fontSizeSmall
+                            color: root.bypassed ? Theme.surfaceVariantText : Theme.primary
                         }
 
                         MouseArea {
-                            id: resetMouseHeader
+                            id: bypassMouse
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                root.resetAllProfiles()
-                                popout.closePopout()
-                            }
+                            onClicked: root.toggleBypass()
                         }
                     }
 
@@ -366,15 +347,57 @@ PluginComponent {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                root.profileOutput = ""
-                                loadProfiles.running = true
-                            }
+                            onClicked: root.refresh(true)
                         }
                     }
                 }
 
                 Item { height: Theme.spacingXS }
+
+                // Not-running state: detect, don't launch.
+                Column {
+                    width: parent.width
+                    spacing: Theme.spacingM
+                    visible: root.detected && !root.eeRunning
+
+                    StyledText {
+                        width: parent.width
+                        text: "Easy Effects is not running."
+                        color: Theme.surfaceVariantText
+                        font.pixelSize: Theme.fontSizeMedium
+                        wrapMode: Text.WordWrap
+                    }
+
+                    StyledRect {
+                        width: parent.width
+                        height: 32
+                        radius: Theme.cornerRadius
+                        color: startMouse.containsMouse ? Theme.surfaceContainerHighest : Theme.surfaceContainerHigh
+
+                        Row {
+                            anchors.centerIn: parent
+                            spacing: Theme.spacingS
+
+                            DankIcon {
+                                name: "play_arrow"
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+
+                            StyledText {
+                                text: "Start Easy Effects service"
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                        }
+
+                        MouseArea {
+                            id: startMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.startService()
+                        }
+                    }
+                }
 
                 // Output Presets
                 StyledText {
@@ -427,7 +450,7 @@ PluginComponent {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                root.loadOutputProfile(index)
+                                root.loadProfile(root.outputProfiles[index])
                                 popout.closePopout()
                             }
                         }
@@ -487,7 +510,7 @@ PluginComponent {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                root.loadInputProfile(index)
+                                root.loadProfile(root.inputProfiles[index])
                                 popout.closePopout()
                             }
                         }
