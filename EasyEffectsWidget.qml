@@ -94,7 +94,7 @@ PluginComponent {
 
     Process {
         id: runningCheck
-        command: ["pgrep", "-x", "easyeffects"]
+        command: ["pidof", "easyeffects"]
         running: false
         onExited: (exitCode, exitStatus) => {
             root.eeRunning = (exitCode === 0)
