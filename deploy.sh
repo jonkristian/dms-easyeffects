@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Deploy this plugin into the local DankMaterialShell plugins directory and
+# Deploy this plugin into the local Dux Shell (DMS) plugins directory and
 # hot-reload it, with a backup so you can always get back to the original.
 #
 #   ./deploy.sh            Back up the deployed copy (once), copy files, reload DMS
@@ -12,7 +12,7 @@ set -euo pipefail
 
 PLUGIN_ID="easyEffects"
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEST_ROOT="${XDG_CONFIG_HOME:-$HOME/.config}/DankMaterialShell/plugins"
+DEST_ROOT="${XDG_CONFIG_HOME:-$HOME/.config}/dms/plugins"
 DEST_DIR="$DEST_ROOT/$PLUGIN_ID"
 # Kept outside the plugins dir so DMS doesn't load it as a second plugin.
 BACKUP_DIR="$SRC_DIR/.deploy-backup"
@@ -20,7 +20,9 @@ BACKUP_DIR="$SRC_DIR/.deploy-backup"
 # Files that make up the plugin (everything else, e.g. .git, is ignored).
 FILES=(
     "plugin.json"
+    "qmldir"
     "EasyEffectsWidget.qml"
+    "EasyEffectsState.qml"
     "EasyEffectsSettings.qml"
     "README.md"
     "LICENSE"
@@ -33,8 +35,8 @@ usage() {
 
 reload_dms() {
     if command -v dms >/dev/null 2>&1; then
-        if dms ipc plugins reload "$PLUGIN_ID" >/dev/null 2>&1; then
-            echo "Reloaded '$PLUGIN_ID' in DankMaterialShell."
+        if dms ipc call plugins reload "$PLUGIN_ID" >/dev/null 2>&1; then
+            echo "Reloaded '$PLUGIN_ID' in Dux Shell."
         else
             echo "Could not reload via DMS (is the shell running?). Toggle the plugin in DMS settings."
         fi
